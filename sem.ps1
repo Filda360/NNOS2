@@ -1,6 +1,10 @@
 ﻿param (
     [Alias("d")]
-    [string]$Directory = (Get-Location)
+    [string]$Directory = (Get-Location),
+    [Alias("c")]
+    [string]$FocusColor = "Green",
+    [Alias("da")]
+    [switch]$DeleteAll = $false
 )                                                                       
 
 # Vytvoření pole nodeModulesArray
@@ -10,10 +14,11 @@ $nodeModulesArray = @()
 Get-ChildItem -Path $Directory -Filter node_modules -Directory -Recurse | Where-Object { $_.FullName -notlike "*\node_modules\*" } | ForEach-Object {
     $sizeInBytes = (Get-ChildItem -Path $_.FullName -Recurse | Measure-Object -Property Length -Sum).Sum
     $sizeInMB = [math]::Round($sizeInBytes / 1MB)
-    # $lastModified = (Get-ChildItem -Path $_.FullName -Recurse | Sort-Object LastWriteTime -Descending | Select-Object -First 1).LastWriteTime
+    $lastModified = (Get-ChildItem -Path $_.FullName -Recurse | Sort-Object LastWriteTime -Descending | Select-Object -First 1).LastWriteTime
     $nodeModulesArray += [PSCustomObject]@{
         Path = $_.FullName
         SizeMB = $sizeInMB
+        LastModified = $lastModified
     };
 }
 
@@ -28,7 +33,17 @@ Write-Host "'-------------------------------------------------------------------
 
 Write-Host "Folder where we search for node_modules: $($Directory)"
 Write-Host "Number of found node_modules folders: $($nodeModulesArray.Count)" -ForegroundColor Blue
-Write-Host "Total size of all node_modules folders: $(((($nodeModulesArray | Measure-Object -Property SizeMB -Sum).Sum) / 1000).ToString('0.00')) GB" -ForegroundColor Blue
+Write-Host "Total size of all node_modules folders: $(((($nodeModulesArray | Measure-Object -Property SizeMB -Sum).Sum) / 1000).ToString('0.000')) GB" -ForegroundColor Blue
+
+
+if($deleteAll) {
+    Write-Host "Deleting all node_modules folders" -ForegroundColor Yellow
+    $nodeModulesArray | ForEach-Object {
+        Remove-Item -Path $_.Path -Recurse -Force
+        Write-Host "The folder $($_.Path) has been deleted" -ForegroundColor Red
+    }
+    Exit
+}
 
 if ($nodeModulesArray.Count -eq 0) {
     Write-Host "No node_modules folders found"
@@ -38,7 +53,9 @@ else {
     Write-Host "Select node_modules to remove:" -ForegroundColor Yellow
     Write-Host " [SPACE] - select" -ForegroundColor Yellow
     Write-Host " [ENTER] - confirm all selection" -ForegroundColor Yellow
-    $selectedItems = Show-Menu -MenuItems $nodeModulesArray -MultiSelect -MenuItemFormatter { $Args | Select -Exp Path }
+    $selectedItems = Show-Menu -MenuItems $nodeModulesArray -MultiSelect -ItemFocusColor $FocusColor -MenuItemFormatter { 
+        Param($M) $M.Path + " (" + $M.SizeMB + " MB) - " + $M.LastModified
+    }
     $selectedItems | ForEach-Object {
         Remove-Item -Path $_.Path -Recurse -Force
         Write-Host "The selected folder $($_.Path) has been deleted" -ForegroundColor Red
