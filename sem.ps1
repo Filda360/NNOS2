@@ -4,14 +4,53 @@
     [Alias("c")]
     [string]$FocusColor = "Green",
     [Alias("da")]
-    [switch]$DeleteAll = $false
-)                                                                       
+    [switch]$DeleteAll = $false,
+    [Alias("t")]
+    [string]$target = "node_modules",
+    [Alias("h")]
+    [switch]$help = $false,
+    [Alias("x")]
+    [switch]$excludeHiddenDirectories = $false,
+    [Alias("f")]
+    [switch]$full = $false,
+    [Alias("e")]
+    [string]$exclude = ""
+)    
+
+Install-Module PSMenu
+
+$excludeDirectories = $exclude -split ' '
+
+if($help) {
+    Write-Host "Usage: sem.ps1 [-d <directory>] [-c <color>] [-da] [-t <target>] [-h] [-x]"
+    Write-Host "  -d <directory>  - directory where we search for node_modules (default: current directory)"
+    Write-Host "  -c <color>      - color of selected item (default: Green)"
+    Write-Host "  -da             - delete all node_modules folders"
+    Write-Host "  -t <target>     - target folder name (default: node_modules)"
+    Write-Host "  -h              - show help"
+    Write-Host "  -x              - exclude hidden directories"
+    Write-Host "  -f              - start searching from the home of the user"
+    Write-Host "  -e <exclude>    - exclude directories from the search"
+    Exit
+}
+
+if($full) {
+    $Directory = $home
+}
 
 # Vytvoření pole nodeModulesArray
 $nodeModulesArray = @()
 
 # Získání složek "node_modules" a přidání jejich cest do pole
-Get-ChildItem -Path $Directory -Filter node_modules -Directory -Recurse | Where-Object { $_.FullName -notlike "*\node_modules\*" } | ForEach-Object {
+Get-ChildItem -Path $Directory -Filter $target -Directory -Recurse 
+| Where-Object { $_.FullName -notlike "*\${target}\*" } 
+| ForEach-Object {
+    if ($_.Parent.Name -in $excludeDirectories) {
+        return
+    }
+    if ($_.FullName -like "*\.*" -and $excludeHiddenDirectories -eq $true) {
+        return
+    }
     $sizeInBytes = (Get-ChildItem -Path $_.FullName -Recurse | Measure-Object -Property Length -Sum).Sum
     $sizeInMB = [math]::Round($sizeInBytes / 1MB)
     $lastModified = (Get-ChildItem -Path $_.FullName -Recurse | Sort-Object LastWriteTime -Descending | Select-Object -First 1).LastWriteTime
